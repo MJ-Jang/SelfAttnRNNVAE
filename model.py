@@ -7,11 +7,11 @@ from torch.autograd import Variable
 
 
 
-class BiLSTM(nn.Module):
+class BiLSTMEncoder(nn.Module):
 
     def __init__(self, vocab: int, emb_size: int, hidden_dim: int,
                  nlayers: int, dropout: float, pad_id: int):
-        super(BiLSTM, self).__init__()
+        super(BiLSTMEncoder, self).__init__()
         self.drop = nn.Dropout(dropout)
         self.encoder = nn.Embedding(vocab, emb_size)
         self.bilstm = nn.LSTM(emb_size, hidden_dim, nlayers, dropout=dropout,
@@ -26,7 +26,7 @@ class BiLSTM(nn.Module):
         self.encoder.weight.data.uniform_(-init_range, init_range)
 
     def forward(self, inp):
-        hidden = self.init_hidden(inp.size(0))
+        hidden = [hid.to(inp.device) for hid in self.init_hidden(inp.size(0))]
         emb = self.drop(self.encoder(inp.transpose(0,1)))
         outp = self.bilstm(emb, hidden)[0]
         outp = torch.transpose(outp, 0, 1).contiguous()
@@ -34,12 +34,8 @@ class BiLSTM(nn.Module):
 
     def init_hidden(self, bsz):
         weight = next(self.parameters()).data
-        if next(self.parameters()).is_cuda:
-            return (Variable(weight.new(self.nlayers * 2, bsz, self.nhid).zero_()).cuda(),
-                    Variable(weight.new(self.nlayers * 2, bsz, self.nhid).zero_()).cuda())
-        else:
-            return (Variable(weight.new(self.nlayers * 2, bsz, self.nhid).zero_()),
-                    Variable(weight.new(self.nlayers * 2, bsz, self.nhid).zero_()))
+        return (Variable(weight.new(self.nlayers * 2, bsz, self.nhid).zero_()),
+                Variable(weight.new(self.nlayers * 2, bsz, self.nhid).zero_()))
 
 
 class SelfAttentiveEncoder(nn.Module):
@@ -48,8 +44,8 @@ class SelfAttentiveEncoder(nn.Module):
                  nlayers: int, attn_unit: int, attn_hops: int,
                  dropout: float, pad_id: int):
         super(SelfAttentiveEncoder, self).__init__()
-        self.bilstm = BiLSTM(vocab, emb_size, hidden_dim,
-                             nlayers, dropout, pad_id)
+        self.bilstm = BiLSTMEncoder(vocab, emb_size, hidden_dim,
+                                    nlayers, dropout, pad_id)
         self.drop = nn.Dropout(dropout)
         self.ws1 = nn.Linear(hidden_dim * 2, attn_unit, bias=False)
         self.ws2 = nn.Linear(attn_unit, attn_hops, bias=False)

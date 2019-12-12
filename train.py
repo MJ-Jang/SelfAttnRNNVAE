@@ -13,7 +13,7 @@ parser = argparse.ArgumentParser()
 
 parser.add_argument('-hidden_dim',
                     type=int,
-                    default=128,
+                    default=256,
                     help="model hidden dimension")
 
 parser.add_argument('-latent_dim',
@@ -28,12 +28,12 @@ parser.add_argument('-nlayers',
 
 parser.add_argument('-attn_unit',
                     type=int,
-                    default=128,
+                    default=512,
                     help="attention unit")
 
 parser.add_argument('-attn_hops',
                     type=int,
-                    default=16,
+                    default=8,
                     help="attention hops")
 
 parser.add_argument('-max_len',
@@ -167,7 +167,7 @@ class TrainOperator:
 
         data = data[:-1]
         dataset = AutoencoderDataset(data, self.tok, args.max_len)
-        loader = DataLoader(dataset, batch_size=args.batch_size, num_workers=0, )
+        loader = DataLoader(dataset, batch_size=args.batch_size, num_workers=4, )
         return loader
 
     def _calculate_loss(self, batch, is_train=True):

@@ -1,1 +1,1 @@
-CUDA_VISIBLE_DEVICES=1 python train.py -tok=./resource/SALTokenizer.model -save=./resource/SelfattnVAE_v1.model -tr_data=./data/svae_tr.txt -dev_data=./data/svae_dev.txt
+CUDA_VISIBLE_DEVICES=7 python train.py -tok=./resources/SALTokenizer.model -save=./resources/SelfattnVAE__heavy_v1.model -tr_data=../data_repo/unlabeled/unlabeled_all_tr.txt -dev_data=../data_repo/unlabeled/unlabeled_all_dev.txt

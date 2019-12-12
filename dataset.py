@@ -60,7 +60,7 @@ class AutoencoderDataset(Dataset):
                 token_len = 1
             else:
                 tokens = tokens[:max_len+1]
-                token_len = token_len + 1
+                token_len = max_len + 1
 
         elif not is_src and not is_input:
             tokens = tokens + [tokenizer.piece_to_id('</s>')]
@@ -72,5 +72,5 @@ class AutoencoderDataset(Dataset):
                 token_len = 1
             else:
                 tokens = tokens[:max_len+1]
-                token_len = token_len + 1
+                token_len = max_len + 1
         return tokens, token_len
