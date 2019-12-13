@@ -93,7 +93,7 @@ class SelfAttentiveEncoder(nn.Module):
         return self.bilstm.init_hidden(bsz)
 
 
-class SelfAttnVariationalEncoder:
+class SelfAttnVariationalEncoder(nn.Module):
     def __init__(self, vocab: int, hidden_dim: int, latent_dim:int,
                  nlayers: int, attn_unit: int, attn_hops: int,
                  dropout: float, pad_id: int):
@@ -110,14 +110,14 @@ class SelfAttnVariationalEncoder:
         self.mu_enc = nn.Linear(hidden_dim * 2, latent_dim)
         self.log_sigma_enc = nn.Linear(hidden_dim * 2, latent_dim)
 
-    def encode(self,input_ids: torch.LongTensor, is_train: bool = True):
+    def forward(self, input_ids: torch.LongTensor, is_train: bool = True):
         output, alphas = self.enc(input_ids)
         final_state = output.mean(1)
         return self._sample_latent(final_state, is_train)
 
     def _sample_latent(self, h_enc, is_train):
         mu = self.mu_enc(h_enc)
-        if is_train:
+        if not is_train:
             return mu
         else:
             log_sigma = self.log_sigma_enc(h_enc)
@@ -142,16 +142,16 @@ class SelfAttnVAE(nn.Module):
         self.hidden_dim = hidden_dim
         self.latent_dim = latent_dim
 
-        self.enc = SelfAttnVariationalEncoder(vocab=vocab,
-                                              hidden_dim=hidden_dim,
-                                              latent_dim=latent_dim,
-                                              nlayers=nlayers,
-                                              attn_unit=attn_unit,
-                                              attn_hops=attn_hops,
-                                              dropout=dropout,
-                                              pad_id=pad_id)
+        self.encoder = SelfAttnVariationalEncoder(vocab=vocab,
+                                                  hidden_dim=hidden_dim,
+                                                  latent_dim=latent_dim,
+                                                  nlayers=nlayers,
+                                                  attn_unit=attn_unit,
+                                                  attn_hops=attn_hops,
+                                                  dropout=dropout,
+                                                  pad_id=pad_id)
 
-        self.word_embeddings = self.enc.enc.bilstm.encoder
+        self.word_embeddings = self.encoder.enc.bilstm.encoder
 
         self.dec_gru = nn.GRU(hidden_dim, latent_dim, num_layers=1)
         self.softmax = nn.Softmax(dim=-1)
@@ -162,7 +162,7 @@ class SelfAttnVAE(nn.Module):
                dec_input_ids: torch.LongTensor,
                dec_length: torch.LongTensor):
 
-        z, mu, sigma = self.enc.encode(enc_input_ids)
+        z, mu, sigma = self.encoder(enc_input_ids)
         logits, dec_max_len = self.decode(z, dec_input_ids, dec_length)
         return logits, dec_max_len, mu, sigma
 
