@@ -93,6 +93,45 @@ class SelfAttentiveEncoder(nn.Module):
         return self.bilstm.init_hidden(bsz)
 
 
+class SelfAttnVariationalEncoder():
+    def __init__(self, vocab: int, hidden_dim: int, latent_dim:int,
+                 nlayers: int, attn_unit: int, attn_hops: int,
+                 dropout: float, pad_id: int):
+        super(SelfAttnVariationalEncoder, self).__init__()
+        self.enc = SelfAttentiveEncoder(vocab=vocab,
+                                        emb_size=hidden_dim,
+                                        hidden_dim=hidden_dim,
+                                        nlayers=nlayers,
+                                        attn_unit=attn_unit,
+                                        attn_hops=attn_hops,
+                                        dropout=dropout,
+                                        pad_id=pad_id)
+
+        self.mu_enc = nn.Linear(hidden_dim * 2, latent_dim)
+        self.log_sigma_enc = nn.Linear(hidden_dim * 2, latent_dim)
+
+    def forward(self,input_ids: torch.LongTensor, is_train: bool = True):
+        output, alphas = self.enc(input_ids)
+        final_state = output.mean(1)
+        return final_state(final_state, is_train)
+
+    def encode(self, input_ids: torch.LongTensor):
+        output, alphas = self.enc(input_ids)
+        final_state = output.mean(1)
+        return final_state
+
+    def _sample_latent(self, h_enc, is_train):
+        mu = self.mu_enc(h_enc)
+        if is_train:
+            return mu
+        else:
+            log_sigma = self.log_sigma_enc(h_enc)
+            sigma = torch.exp(log_sigma)
+            std_z = torch.from_numpy(np.random.normal(0, 1, size=sigma.size())).float()
+            latent = mu + sigma * Variable(std_z, requires_grad=False).to(h_enc.device)
+            return latent, mu, sigma
+
+
 class SelfAttnVAE(nn.Module):
     def __init__(self,
                  vocab: int,
@@ -108,38 +147,28 @@ class SelfAttnVAE(nn.Module):
         self.hidden_dim = hidden_dim
         self.latent_dim = latent_dim
 
-        self.enc = SelfAttentiveEncoder(vocab=vocab,
-                                        emb_size=hidden_dim,
-                                        hidden_dim=hidden_dim,
-                                        nlayers=nlayers,
-                                        attn_unit=attn_unit,
-                                        attn_hops=attn_hops,
-                                        dropout=dropout,
-                                        pad_id=pad_id)
-        self.word_embeddings = self.enc.bilstm.encoder
+        self.enc = SelfAttnVariationalEncoder(vocab=vocab,
+                                              hidden_dim=hidden_dim,
+                                              latent_dim=latent_dim,
+                                              nlayers=nlayers,
+                                              attn_unit=attn_unit,
+                                              attn_hops=attn_hops,
+                                              dropout=dropout,
+                                              pad_id=pad_id)
+        self.word_embeddings = self.enc.enc.bilstm.encoder
 
         self.dec_gru = nn.GRU(hidden_dim, latent_dim, num_layers=1)
         self.softmax = nn.Softmax(dim=-1)
-
-        self.mu_enc = nn.Linear(hidden_dim * 2, latent_dim)
-        self.log_sigma_enc = nn.Linear(hidden_dim * 2, latent_dim)
         self.fc = nn.Linear(latent_dim, vocab)
 
     def forward(self,
                enc_input_ids: torch.LongTensor,
                dec_input_ids: torch.LongTensor,
-               dec_length: torch.LongTensor,
-               batch_size: int = None):
+               dec_length: torch.LongTensor):
 
-        h_enc = self.encode(enc_input_ids)
-        z, mu, sigma = self._sample_latent(h_enc)
+        z, mu, sigma = self.enc(enc_input_ids)
         logits, dec_max_len = self.decode(z, dec_input_ids, dec_length)
         return logits, dec_max_len, mu, sigma
-
-    def encode(self, input_ids: torch.LongTensor):
-        output, alphas = self.enc(input_ids)
-        final_state = output.mean(1)
-        return final_state
 
     def decode(self,
                z,
@@ -154,11 +183,3 @@ class SelfAttnVAE(nn.Module):
         output, out_lengths = torch.nn.utils.rnn.pad_packed_sequence(output, batch_first=True)
         output = self.fc(output)
         return output, int(max(out_lengths))
-
-    def _sample_latent(self, h_enc):
-        mu = self.mu_enc(h_enc)
-        log_sigma = self.log_sigma_enc(h_enc)
-        sigma = torch.exp(log_sigma)
-        std_z = torch.from_numpy(np.random.normal(0, 1, size=sigma.size())).float()
-        latent = mu + sigma * Variable(std_z, requires_grad=False).to(h_enc.device)
-        return latent, mu, sigma
