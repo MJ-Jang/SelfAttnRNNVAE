@@ -7,6 +7,7 @@ from torch.utils.data import DataLoader
 from model import SelfAttnVAE
 from dataset import AutoencoderDataset
 from loss import sequence_cross_entropy_with_logits, latent_loss
+import torch.nn.functional as F
 
 parser = argparse.ArgumentParser()
 
@@ -18,7 +19,7 @@ parser.add_argument('-hidden_dim',
 
 parser.add_argument('-latent_dim',
                     type=int,
-                    default=128,
+                    default=256,
                     help="model latent dimension")
 
 parser.add_argument('-nlayers',
@@ -186,13 +187,14 @@ class TrainOperator:
         logits, dec_max_len, mu, sigma = self.model(src_id, tgt_enc_id, tgt_enc_len)
 
         targets = tgt_dec_id[:, :dec_max_len]
-        seq_mask = (targets != self.pad_id).float()
+        #seq_mask = (targets != self.pad_id).float()
 
-        CE = sequence_cross_entropy_with_logits(logits=logits,
-                                                targets=targets,
-                                                weights=seq_mask,
-                                                average='token',
-                                                label_smoothing=args.label_smoothing)
+        #CE = sequence_cross_entropy_with_logits(logits=logits,
+        #                                        targets=targets,
+        #                                        weights=seq_mask,
+        #                                        average='token',
+        #                                        label_smoothing=args.label_smoothing)
+        CE = F.cross_entropy(logits.view(-1, logits.size(-1)), target=targets.reshape(-1), ignore_index=self.pad_id)
         KLD = latent_loss(mu, sigma)
         loss = CE + KLD
 
